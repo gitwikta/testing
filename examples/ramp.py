@@ -64,7 +64,7 @@ class MotorRampExample:
 
         # Start a separate thread to do the motor test.
         # Do not hijack the calling thread!
-        Thread(target=self.incre).start()
+        Thread(target=self._ramp_motors).start()
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -95,7 +95,7 @@ class MotorRampExample:
         self._cf.close_link()
 
     def _ramp_motors(self):
-        thrust_mult = 0.5
+        thrust_mult = 1
         thrust_step = 100
         thrust = 20000
         pitch = 0
@@ -105,7 +105,7 @@ class MotorRampExample:
             self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
             time.sleep(0.1)
             if thrust >= 25000:
-                thrust_mult = -0.1
+                thrust_mult = -1
             thrust += thrust_step * thrust_mult
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         # Make sure that the last packet leaves before the link is closed
