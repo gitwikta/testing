@@ -85,7 +85,7 @@ class MyFirstExample:
         # Start a separate thread to do the motor test.
         # Do not hijack the calling thread!
 
-        #Thread(target=self._ramp_motors).start()
+        Thread(target=self._ramp_motors).start()
 
 
     def _log_data(self, timestamp, data, logconf):

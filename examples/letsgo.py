@@ -33,7 +33,7 @@ sys.path.append("../lib")
 import cflib.crtp
 import logging
 import time
-from threading import Thread, Timer, RLock, Lock
+from threading import Thread, Timer
 import cflib.crtp
 from cfclient.utils.logconfigreader import LogConfig
 from cflib.crazyflie import Crazyflie
@@ -42,11 +42,16 @@ logging.basicConfig(level=logging.ERROR)
 
 class MyFirstExample:
     """MyExamples"""
+    thrust = 0
+    thrust_step = 10
+    pitch = 0
+    roll = 0
+    yawrate = 0
 
     def __init__(self, link_uri):
         """ Initialize and run the example with the specified link_uri """
-        self._cf = Crazyflie()
 
+        self._cf = Crazyflie()
         self._cf.connected.add_callback(self._connected)
         self._cf.disconnected.add_callback(self._disconnected)
         self._cf.connection_failed.add_callback(self._connection_failed)
@@ -60,8 +65,6 @@ class MyFirstExample:
         """ This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
         #setup log config for sensor
-        print("connected")
-        #self._cf.commander.send_setpoint(0, 0, 0, 32767)
         self._log_sensor = LogConfig("Proximity sensor", 100)
         self._log_sensor.add_variable("adc.vProx")
         self._log_sensor.add_variable("baro.aslLong")
@@ -75,71 +78,57 @@ class MyFirstExample:
             self._log_sensor.error_cb.add_callback(self._log_error)
             # Start the logging
             self._log_sensor.start()
-
         else:
             print("Could not add logconfig since some variables are not in TOC")
-        #hover = Thread(target=self._hover)
-        turn = Thread(name="turn", target=self._turn)
-        turn.start()
-        #
-    #D O K U VO LE .. Lock ?
-     #
-    def _turn(self):
-        i = 0
-        while i < 5:
-            print("turning...", i)
-            i += 1
+
+        loop = Thread(target=self._send_loop)
+        loop.start()
+        # Start a timer to disconnect in 5s
+        #t = Timer(10, self._cf.close_link)
+        #t.start()
+
+        #Thread(target=self._ramp_motors).start()
+
+    def _test_loop(self):
+        #temp_thrust = self._log_data(data="stabilizer.thrust")
+        #self.thrust = 1
+        while True:
+            print(self.thrust)
+            time.sleep(1)
+        pass
+
+    def _send_loop(self):
+        while True:
+            self._send_command(self.thrust)
             time.sleep(0.5)
-        print("finished")
+        pass
 
-    def _hover(self):
-
-        thrust = 10767
-        thrust_step = 10
-        pitch = 0
-        roll = 0
-        yawrate = 0
-
+    def _send_command(self, thrust):
         while thrust < 32767:
-            self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
-            thrust += thrust_step
+            thrust += self.thrust_step
+            self._cf.commander.send_setpoint(self.roll, self.pitch, self.yawrate, thrust)
+            #self.thrust = thrust
+            #self.thrust = thrust
+
+        self._cf.commander.send_setpoint(self.roll, self.pitch, self.yawrate, thrust)
         self._cf.param.set_value("flightmode.althold", "True")
-        while 0 < 1:
-            self._cf.commander.send_setpoint(roll, pitch, yawrate, 32767)
-            time.sleep(0.5)
+
 
     def _log_data(self, timestamp, data, logconf):
         """Callback froma the log API when data arrives"""
-
-        global myprox
-        global switch
-        global ref_baro
-        #global act_baro
-        #global thrust
-
-        thrust = data["stabilizer.thrust"]
+        global switch, ref_baro
         myprox = data["adc.vProx"]
         act_baro = data["baro.aslLong"]
-
+        logged_thrust = data["stabilizer.thrust"]
         if switch is True:
             print("Switch")
             switch = False
             ref_baro = data["baro.aslLong"]
-        print(thrust, act_baro, switch)
-
-
-        #Thread(target=self._hover).start()
-
-        #self._ramp_motors(thrust, act_baro)
-        #long = float(data["adc.vProx"])
-        #self._ramp_motors()
-
-        #Thread(target=self._hover).start()
-
-
-
-
-        #print "[%d][%s]: %s" % (timestamp, logconf.name, data)
+        else:
+            pass
+        print("Thrust:", logged_thrust, myprox, act_baro, ref_baro)
+        self.thrust = logged_thrust
+        return logged_thrust, myprox, act_baro, ref_baro
 
     def _log_error(self, logconf, msg):
         """Callback from the log API when an error occurs"""
@@ -154,59 +143,12 @@ class MyFirstExample:
     def _connection_lost(self, link_uri, msg):
         """Callback when disconnected after a connection has been made (i.e
         Crazyflie moves out of range)"""
-        self._disconnected(link_uri)
         print "Connection to %s lost: %s" % (link_uri, msg)
 
     def _disconnected(self, link_uri):
         """Callback when the Crazyflie is disconnected (called in all cases)"""
-
-        print "Disconnected from %s...lANDING" % link_uri
-
-        time.sleep(0.1)
-        self._cf.close_link()
+        print "Disconnected from %s" % link_uri
         #self.is_connected = False
-
-
-    def _ramp_motors(self, thrust, act_baro):
-
-        #thrust_mult = 1
-        thrust_step = 10
-        pitch = 0
-        roll = 0
-        yawrate = 0
-        temp_thrust = thrust
-        #thrust = 32767
-        #print(thrust)
-
-        #while thrust <= 32000:
-        #    thrust += thrust_step
-        #    self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
-      #     print(thrust, temp_thrust)
-            #time.sleep(1)
-        #self._ramp_motors(thrust, act_baro)
-        #time.sleep(0.5)
-
-        #if thrust > 30000:
-        #if thrust > 0:
-        #self._cf.param.set_value("flightmode.althold", "True")
-        #     print("H O V E R I N G")
-        #    self._cf.commander.send_setpoint(0, 0, 0, 32767)
-        #    hover = True
-        #self._ramp_motors(thrust,act_baro)
-
-        # Make sure that the last packet leaves before the link is closed
-        # since the message queue is not flushed before closing
-
-        # H O V E R
-
-
-        #time.sleep(0.5);
-
-
-
-       # while some_condition:
-       #     cf.commander.send_setpoint(0,0,0,32767);
-       #     time.sleep(0.01);
 
 
 
@@ -223,6 +165,5 @@ if __name__ == '__main__':
         print i[0]
     if len(available) > 0:
         le = MyFirstExample(available[0][0])
-        print("STAAAARTTT")
     else:
         print "No Crazyflies found, cannot run program"
